@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #ifndef HASHMAP
 #error "this file needs HASHMAP defined"
 #endif
