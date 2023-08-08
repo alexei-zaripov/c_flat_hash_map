@@ -244,6 +244,8 @@ static uint32_t group_count_empty_or_deleted(uint8_t *c) {
    && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #include <arm_neon.h>
 
+#define HASHMAP_NEON_OPTS 1
+
 typedef uint64_t group_mask_t;
 
 static size_t mask_get_lsb(group_mask_t m) {
@@ -258,7 +260,7 @@ static uint64_t group_match(uint8_t *c, uint8_t n) {
 	uint64_t msbs = 0x8080808080808080ULL;
 	uint8x8_t dup = vdup_n_u8(n);
 	uint8x8_t cm = vceq_u8(dup, vld1_u8(c));
-	return vget_lane_u64(vreinterpret_u64_u8(cm), 0) & msbs;
+	return vget_lane_u64(vreinterpret_u64_u8(cm), 0);
 }
 
 static uint64_t group_match_empty(uint8_t *c) {
@@ -383,7 +385,14 @@ static int hm_find_offset_with_hash(hash_map_t *h, hkey_t k, size_t hash, size_t
 	probe_t p = probe_new(h->capacity, hash);
 	while (1) {
 		group_mask_t hits = group_match(h->ctrl+p.offset, hash & 0x7F);
+#ifdef HASHMAP_NEON_OPTS
+		if (hits) {
+			hits &= 0x8080808080808080ULL;
+			goto skip_cond;
+		}
+#endif
 		for (; hits; hits &= hits - 1) {
+		skip_cond:;
 			size_t i = mask_get_lsb(hits) + p.offset & h->capacity;
 			if (hashkeyeq(k, h->slots[i].k)) {
 				*pos = i;
@@ -602,6 +611,7 @@ void hm_iter_next(hash_map_iter *i) {
 #undef HASHPREF
 #undef HASHFN
 #undef HASHKEYEQ
+#undef HASHMAP_NEON_OPTS
 #undef kv_pair
 #undef hash_map_t
 #undef hash_map_iter
